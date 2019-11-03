@@ -1,8 +1,9 @@
 #Restricted Boltzmann Machine
 import torch
+import numpy as np
 
 
-class RBM(nn.Module):
+class RBM(torch.nn.Module):
     '''
     A class containing the model of a single restricted Boltzmann machine.
     
@@ -30,6 +31,13 @@ class RBM(nn.Module):
         hidden_activations = torch.matmul(visible_probabilities, self.weights) + self.hidden_bias
         hidden_probabilities = self._sigmoid(hidden_activations)
         return hidden_probabilities
+    
+    def hidden_activation(self, visible_probabilities):
+        '''
+        Returns the activation of hidden variables
+        '''
+        hidden_activations = torch.matmul(visible_probabilities, self.weights) + self.hidden_bias
+        return hidden_activations
 
     def sample_visible(self, hidden_probabilities):
         '''
@@ -41,6 +49,12 @@ class RBM(nn.Module):
         visible_probabilities = self._sigmoid(visible_activations)
         return visible_probabilities
     
+    def visible_activation(self, hidden_probabilities):
+        '''
+        Returns the activation of visible variables
+        '''
+        visible_activations = torch.matmul(hidden_probabilities, self.weights.t()) + self.visible_bias
+        return visible_activations    
     
     def _sigmoid(self, x):
         '''
@@ -57,6 +71,33 @@ class RBM(nn.Module):
 
         return random_probabilities
 
-    def contrastive_divergence(self, input_data):
-        return error
+    def free_energy(self, v_sample, W):
+        num = len(v_sample)
+        Wv = np.clip(torch.matmul(v_sample,W) + self.hidden_bias,-80,80)    #we restrict the result to the range -80, 80
+        hidden = np.log(1+np.exp(Wv)).sum(1)
+        vbias = torch.matmul(v_sample, self.visible_bias).view(len(hidden))
+        return -hidden.view(num)-vbias.view(num)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
