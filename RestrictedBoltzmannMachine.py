@@ -154,9 +154,9 @@ class RBM(torch.nn.Module):
         hidden_bias_vector = torch.zeros(num_hidden)
         
         for input_vector in training_data:
-            ph_mean, ph_sample = self.sample_hidden(input_vector)
+            #ph_mean, ph_sample = self.sample_hidden(input_vector)
             
-            chain_start = ph_sample
+            chain_start = input_vector
     
     
             #this computers a gibbs sampling of my input vector
@@ -170,7 +170,7 @@ class RBM(torch.nn.Module):
     
     
             
-            v_tilda = nv_means
+            v_tilda = nv_samples
             h_tilda, _ = self.sample_visible(v_tilda)
             
             v_t = v_sample
