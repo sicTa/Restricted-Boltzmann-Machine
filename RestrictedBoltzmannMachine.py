@@ -163,10 +163,38 @@ class RBM(torch.nn.Module):
                 nh_means, nh_samples = self.gibbs_hvh(nh_samples)
 
 
-        #implement the rest of the algorithm here!!!
-
-
-    
+        
+        v_tilda = nv_means
+        h_tilda, _ = self.sample_visible(v_tilda)
+        
+        v_t = v_sample
+        h_t, _ = self.sample_visible(v_t)
+        
+        #we now convert to numpy array, computer outer vector
+        #and then return to pytorch tensor
+        v_tilda_numpy = v_tilda.numpy()
+        h_tilda_numpy = h_tilda.numpy()
+        v_t_numpy = v_t.numpy()
+        h_t_numpy = h_t.numpy()
+        
+        help_matrix_numpy = np.outer(h_t_numpy, v_t_numpy) - np.outer(h_tilda_numpy, v_tilda_numpy)
+        help_matrix = torch.from_numpy(help_matrix_numpy)
+        
+        #adjusting the weights
+        self.weights = self.weights + self.learning_rate * help_matrix
+        
+        self.hidden_bias = self.hidden_bias + self.learning_rate * (h_t - h_tilda)
+        
+        self.visible_bias = self.visible_bias + self.learning_rate * (v_t - v_tilda)
+        
+        
+    def train(self, training_set, num_epochs):
+        for i in range(num_epochs):
+            for input_vector in training_set:
+                self.contrastive_divergence(input_vector)
+        
+        
+        
     def _sigmoid(self, x):
         '''
         Standard definition of a sigmoid function
