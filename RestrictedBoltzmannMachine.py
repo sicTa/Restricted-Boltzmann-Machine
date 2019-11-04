@@ -132,8 +132,8 @@ class RBM(torch.nn.Module):
         h1_prob, h1_sample = self.sample_hidden(v_sample)
         v1_prob, v1_sample = self.sample_visible(h1_sample)
 
-        return [h1_prob, h1_sample,
-                v1_prob, v1_sample]
+        return [v1_prob, v1_sample,
+                h1_prob, h1_sample]
 
     def free_energy(self, v_sample, W):
         num = len(v_sample)
@@ -157,10 +157,10 @@ class RBM(torch.nn.Module):
         for step in range(self.num_gibbs_samplings):
             if step == 0:
                 nv_means, nv_samples,\
-                nh_means, nh_samples = self.gibbs_hvh(chain_start)
+                nh_means, nh_samples = self.gibbs_vhv(chain_start)
             else:
                 nv_means, nv_samples,\
-                nh_means, nh_samples = self.gibbs_hvh(nh_samples)
+                nh_means, nh_samples = self.gibbs_vhv(nh_samples)
 
 
         
