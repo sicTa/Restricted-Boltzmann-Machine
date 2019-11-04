@@ -61,7 +61,7 @@ class RBM(torch.nn.Module):
                                        n=1,
                                        p=visible_probabilities_numpy)
 
-        visible_sample = tensot.from_numpy(v1_sample_numpy)
+        visible_sample = tensor.from_numpy(v1_sample_numpy)
         
         return visible_probabilities, visible_sample
     
