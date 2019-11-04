@@ -9,7 +9,7 @@ class RBM(torch.nn.Module):
     
     '''
     
-    def __init__(self, num_visible, num_hidden, num_gibbs_samplings, learning_rate=1e-3):
+    def __init__(self, num_visible, num_hidden, num_gibbs_samplings = 1, learning_rate=1e-3):
         super(RBM,self).__init__()
         self.desc = "RBM"
           
