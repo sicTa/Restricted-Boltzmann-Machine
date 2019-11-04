@@ -152,7 +152,9 @@ class RBM(torch.nn.Module):
         
         chain_start = ph_sample
 
-        for step in xrange(self.num_gibbs_samplings):   #using xrange to reduce memory usage
+
+        #this computers a gibbs sampling of my input vector
+        for step in range(self.num_gibbs_samplings):
             if step == 0:
                 nv_means, nv_samples,\
                 nh_means, nh_samples = self.gibbs_hvh(chain_start)
