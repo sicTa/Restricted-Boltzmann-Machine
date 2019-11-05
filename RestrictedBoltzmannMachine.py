@@ -209,6 +209,8 @@ class RBM(torch.nn.Module):
                 self.contrastive_divergence(training_set)
         
         
+    def return_weights(self):
+        return self.weights
         
     def _sigmoid(self, x):
         '''
