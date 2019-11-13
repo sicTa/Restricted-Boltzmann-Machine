@@ -18,9 +18,12 @@ class RBM(torch.nn.Module):
         self.num_gibbs_samplings = num_gibbs_samplings                #number of Gibbs samplings
         self.learning_rate = learning_rate
 
-        self.weights = torch.randn(num_visible, num_hidden) * 0.1     #initialize weight to random value
-        self.visible_bias = torch.ones(num_visible) * 0.5             #initialize the visible bias to 0.5
-        self.hidden_bias = torch.zeros(num_hidden)                    #initialize hidden bias to 0
+        self.weights = np.random.rand(num_visible, num_hidden) * 0.1     #initialize weight to random value
+        
+        #the following need to be defined as a ndarray
+        #for the np.dot function towork
+        self.visible_bias = np.ones((num_visible, 1)) * 0.5             #initialize the visible bias to 0.5
+        self.hidden_bias = np.zeros((num_hidden, 1))                    #initialize hidden bias to 0
 
     def sample_hidden(self, visible_probabilities):
         '''
@@ -28,23 +31,43 @@ class RBM(torch.nn.Module):
         For more information refer to paper "Deep Belief Networks for phone recognition"
         page 2.
         '''
-        hidden_activations = torch.matmul(visible_probabilities, self.weights) + self.hidden_bias
+        #print("Shape of visible probs")
+        #print(visible_probabilities.shape)
+        
+        #print("Shape of weight")
+        #print(self.weights.shape)
+        
+        #print("Shape of first product")
+        #print(np.dot(visible_probabilities.transpose(), self.weights).shape)
+        
+        #treat all as ndarrays (easier that way)
+        #hidden_activations = np.dot(visible_probabilities, self.weights) + self.hidden_bias
+        hidden_activations = np.dot(visible_probabilities.transpose(), self.weights).transpose() + self.hidden_bias
         hidden_probabilities = self._sigmoid(hidden_activations)
+        
+        #print("Shape of hidden activations")
+        #print(hidden_activations.shape)
 
-        hidden_probabilities_numpy = hidden_probabilities.numpy()
-        h1_sample_numpy = np.binomial(size=hidden_probabilities_numpy.shape,   # discrete: binomial
+        #hidden_probabilities_numpy = hidden_probabilities.numpy()
+        hidden_probabilities_numpy = hidden_probabilities
+        h1_sample_numpy = np.random.binomial(size=hidden_probabilities_numpy.shape,   # discrete: binomial
                                        n=1,
                                        p=hidden_probabilities_numpy)
 
-        hidden_sample = tensor.from_numpy(h1_sample_numpy)
+        #hidden_sample = tensor.from_numpy(h1_sample_numpy)
+        hidden_sample = h1_sample_numpy
         
+        #print("Shape of hidden samp")
+        #print(hidden_sample.shape)
+
+        #returns 2 ndarrays
         return hidden_probabilities, hidden_sample
     
     def hidden_activation(self, visible_probabilities):
         '''
         Returns the activation of hidden variables
         '''
-        hidden_activations = torch.matmul(visible_probabilities, self.weights) + self.hidden_bias
+        hidden_activations = np.dot(visible_probabilities.transpose(), self.weights).transpose() + self.hidden_bias
         return hidden_activations
 
     def sample_visible(self, hidden_probabilities):
@@ -53,23 +76,37 @@ class RBM(torch.nn.Module):
         For more information refer to paper "Deep Belief Networks for phone recognition"
         page 2.
         '''
-        visible_activations = torch.matmul(hidden_probabilities, self.weights.t()) + self.visible_bias
+        
+        #print("this is the my test shape")
+        #print(hidden_probabilities.shape)
+        #print(self.weights.transpose().shape)
+        #print(np.dot(hidden_probabilities.transpose(), self.weights.transpose()).shape)
+        #print(hidden_probabilities.shape)
+        #print(self.visible_bias.shape)
+        
+        visible_activations = np.dot(hidden_probabilities.transpose(), self.weights.transpose()).transpose() + self.visible_bias
         visible_probabilities = self._sigmoid(visible_activations)
 
-        visible_probabilities_numpy = visible_probabilities.numpy()
-        v1_sample_numpy  = np.binomial(size=visible_probabilities_numpy.shape,   # discrete: binomial
+        #visible_probabilities_numpy = visible_probabilities.numpy()
+        visible_probabilities_numpy = visible_probabilities
+        v1_sample_numpy  = np.random.binomial(size=visible_probabilities_numpy.shape,   # discrete: binomial
                                        n=1,
                                        p=visible_probabilities_numpy)
 
-        visible_sample = tensor.from_numpy(v1_sample_numpy)
+        #visible_sample = tensor.from_numpy(v1_sample_numpy)
+        visible_sample = v1_sample_numpy
         
+        #print("This is the final result")
+        #print(visible_sample.shape)
+        
+        #returns two ndarrays
         return visible_probabilities, visible_sample
     
     def visible_activation(self, hidden_probabilities):
         '''
         Returns the activation of visible variables
         '''
-        visible_activations = torch.matmul(hidden_probabilities, self.weights.t()) + self.visible_bias
+        visible_activations = np.dot(hidden_probabilities, self.weights.transpose()) + self.visible_bias
         return visible_activations
 
     def propup(self, v):
@@ -77,12 +114,11 @@ class RBM(torch.nn.Module):
         For a visible vector v return another vector of probabilities.
         For more information refer to paper "Deep Belief Networks for phone recognition"
         page 2.
-
         This is, in fact, the result the RBM sees at the hidden layer when a signal
         is coming from the visible layer.
         '''
 
-        propup_pre_sigma = torch.matmul(v, self.weights.t()) + self.hidden_bias
+        propup_pre_sigma = np.dot(v, self.weights.t()) + self.hidden_bias
         return self._sigmoid(propup_pre_sigma)
 
 
@@ -91,12 +127,11 @@ class RBM(torch.nn.Module):
         For a hidden vector h return another vector of probabilities.
         For more information refer to paper "Deep Belief Networks for phone recognition"
         page 2.
-
         This is, in fact, the result the RBM sees at the visible layer when a signal
         is coming from the hidden layer.
         '''
 
-        propdown_pre_sigma = torch.matmul(h, self.weights.t()) + self.visible_bias
+        propdown_pre_sigma = np.dot(h, self.weights.transpose()) + self.visible_bias
         return self._sigmoid(propdown_pre_sigma)
 
     def reconstruct(self, v):
@@ -109,7 +144,7 @@ class RBM(torch.nn.Module):
         reconstructed_v = self.propdown(hidden_res)
         return reconstructed_v
 
-    def gibbs_hvh(h_sample):
+    def gibbs_hvh(self, h_sample):
         '''
         This method reconstruct one gibbs iteration. A signal is
         propagated from the hidden layer, the result is memorized at the visible
@@ -119,21 +154,18 @@ class RBM(torch.nn.Module):
         v1_prob, v1_sample = self.sample_visible(h_sample)
         h1_prob, h1_sample = self.sample_hidden(v1_sample)
 
-        return [v1_prob, v1_sample,
-                h1_prob, h1_sample]
+        return v1_prob, v1_sample, h1_prob, h1_sample
 
-    def gibbs_vhv(v_sample):
+    def gibbs_vhv(self, v_sample):
         '''
         This method reconstruct one gibbs iteration. A signal is
         propagated from the visible layer, the result is memorized at the hidden
         layer and then propagated back to the visible layer. 
         '''
-
         h1_prob, h1_sample = self.sample_hidden(v_sample)
         v1_prob, v1_sample = self.sample_visible(h1_sample)
 
-        return [v1_prob, v1_sample,
-                h1_prob, h1_sample]
+        return v1_prob, v1_sample, h1_prob, h1_sample
 
     def free_energy(self, v_sample, W):
         num = len(v_sample)
@@ -143,21 +175,25 @@ class RBM(torch.nn.Module):
         return -hidden.view(num)-vbias.view(num)
 
 
-    def contrastive_divergence(self, input_vector, training_data):
+    def contrastive_divergence(self, training_data):
         '''
         An implementation of Contrastive Divergence algorithm with
         k Gibbs' samplings (CD-k)
         '''
         
-        weight_matrix = torch.zeros(num_visible, num_hidden)
-        visible_bias_vector = torch.zeros(num_visible)
-        hidden_bias_vector = torch.zeros(num_hidden)
+        num_visible = self.num_visible
+        num_hidden = self.num_hidden
+        
+        
+        weight_matrix = np.zeros((num_visible, num_hidden))
+        visible_bias_vector = np.zeros((num_visible, 1))
+        hidden_bias_vector = np.zeros((num_hidden, 1))
         
         for input_vector in training_data:
             #ph_mean, ph_sample = self.sample_hidden(input_vector)
             
-            chain_start = input_vector
-    
+            chain_start = np.asarray(input_vector).reshape((len(input_vector), 1))
+
     
             #this computers a gibbs sampling of my input vector
             for step in range(self.num_gibbs_samplings):
@@ -171,20 +207,33 @@ class RBM(torch.nn.Module):
     
             
             v_tilda = nv_samples
-            h_tilda, _ = self.sample_visible(v_tilda)
+            #print("this is tilda shape", v_tilda.shape)
+            h_tilda, _ = self.sample_hidden(v_tilda)
             
+            v_sample = chain_start
             v_t = v_sample
-            h_t, _ = self.sample_visible(v_t)
+            h_t, _ = self.sample_hidden(v_t)
             
             #we now convert to numpy array, computer outer vector
             #and then return to pytorch tensor
-            v_tilda_numpy = v_tilda.numpy()
-            h_tilda_numpy = h_tilda.numpy()
-            v_t_numpy = v_t.numpy()
-            h_t_numpy = h_t.numpy()
+            #v_tilda_numpy = v_tilda.numpy()
+            #h_tilda_numpy = h_tilda.numpy()
+            v_tilda_numpy = v_tilda
+            h_tilda_numpy = h_tilda
+            #v_t_numpy = v_t.numpy()
+            #h_t_numpy = h_t.numpy()
+            v_t_numpy = v_t
+            h_t_numpy = h_t
             
             help_matrix_numpy = np.outer(h_t_numpy, v_t_numpy) - np.outer(h_tilda_numpy, v_tilda_numpy)
-            help_matrix = torch.from_numpy(help_matrix_numpy)
+            #help_matrix = torch.from_numpy(help_matrix_numpy)
+            help_matrix = help_matrix_numpy.transpose()
+            
+            #print("this is help matrix shape", help_matrix.shape)
+            #print("this is weight_matrix shape", weight_matrix.shape)
+            #print("this is visible_bias_vector shape", visible_bias_vector.shape)
+            #print("this is hidden_bias_vector shape", hidden_bias_vector.shape)
+            
             
             weight_matrix += help_matrix
             visible_bias_vector += (v_t - v_tilda)
@@ -216,7 +265,7 @@ class RBM(torch.nn.Module):
         '''
         Standard definition of a sigmoid function
         '''
-        return 1 / (1 + torch.exp(-x))
+        return 1 / (1 + np.exp(-x))
 
     def _random_probabilities(self, num):
         '''
@@ -224,14 +273,6 @@ class RBM(torch.nn.Module):
         '''
         random_probabilities = torch.rand(num)
         return random_probabilities
-
-
-
-
-
-
-
-
 
 
 
