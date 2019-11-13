@@ -175,7 +175,7 @@ class RBM(torch.nn.Module):
         return -hidden.view(num)-vbias.view(num)
 
 
-    def contrastive_divergence(self, training_data, num_epochs = 1000):
+    def contrastive_divergence(self, training_data, num_epochs = 20):
         '''
         An implementation of Contrastive Divergence algorithm with
         k Gibbs' samplings (CD-k)
