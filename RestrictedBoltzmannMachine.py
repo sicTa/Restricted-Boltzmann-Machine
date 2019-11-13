@@ -18,7 +18,7 @@ class RBM(torch.nn.Module):
         self.num_gibbs_samplings = num_gibbs_samplings                #number of Gibbs samplings
         self.learning_rate = learning_rate
 
-        self.weights = np.random.rand(num_visible, num_hidden) * 0.1     #initialize weight to random value
+        self.weights = np.random.rand(num_visible, num_hidden) * 0.5     #initialize weight to random value
         
         #the following need to be defined as a ndarray
         #for the np.dot function towork
@@ -106,7 +106,7 @@ class RBM(torch.nn.Module):
         '''
         Returns the activation of visible variables
         '''
-        visible_activations = np.dot(hidden_probabilities, self.weights.transpose()) + self.visible_bias
+        visible_activations = np.dot(hidden_probabilities.transpose(), self.weights.transpose()).transpose() + self.visible_bias
         return visible_activations
 
     def propup(self, v):
@@ -118,7 +118,7 @@ class RBM(torch.nn.Module):
         is coming from the visible layer.
         '''
 
-        propup_pre_sigma = np.dot(v, self.weights.t()) + self.hidden_bias
+        propup_pre_sigma = np.dot(v.transpose(), self.weights).transpose() + self.hidden_bias
         return self._sigmoid(propup_pre_sigma)
 
 
@@ -131,7 +131,7 @@ class RBM(torch.nn.Module):
         is coming from the hidden layer.
         '''
 
-        propdown_pre_sigma = np.dot(h, self.weights.transpose()) + self.visible_bias
+        propdown_pre_sigma = np.dot(h.transpose(), self.weights.transpose()).transpose() + self.visible_bias
         return self._sigmoid(propdown_pre_sigma)
 
     def reconstruct(self, v):
@@ -175,82 +175,79 @@ class RBM(torch.nn.Module):
         return -hidden.view(num)-vbias.view(num)
 
 
-    def contrastive_divergence(self, training_data):
+    def contrastive_divergence(self, training_data, num_epochs = 1000):
         '''
         An implementation of Contrastive Divergence algorithm with
         k Gibbs' samplings (CD-k)
         '''
         
-        num_visible = self.num_visible
-        num_hidden = self.num_hidden
+        for number_of_epochs in range(num_epochs):
+            print("Epoch", number_of_epochs)
+            num_visible = self.num_visible
+            num_hidden = self.num_hidden
+            
+            
+            weight_matrix = np.zeros((num_visible, num_hidden))
+            visible_bias_vector = np.zeros((num_visible, 1))
+            hidden_bias_vector = np.zeros((num_hidden, 1))
+            
+            for input_vector in training_data:
+                #ph_mean, ph_sample = self.sample_hidden(input_vector)
+                chain_start = np.asarray(input_vector).reshape((len(input_vector), 1))
+                #this computers a gibbs sampling of my input vector
+                for step in range(self.num_gibbs_samplings):
+                    if step == 0:
+                        nv_means, nv_samples,\
+                        nh_means, nh_samples = self.gibbs_vhv(chain_start)
+                    else:
+                        nv_means, nv_samples,\
+                        nh_means, nh_samples = self.gibbs_vhv(nv_samples)
         
-        
-        weight_matrix = np.zeros((num_visible, num_hidden))
-        visible_bias_vector = np.zeros((num_visible, 1))
-        hidden_bias_vector = np.zeros((num_hidden, 1))
-        
-        for input_vector in training_data:
-            #ph_mean, ph_sample = self.sample_hidden(input_vector)
+                v_tilda = nv_samples
+                #print("this is tilda shape", v_tilda.shape)
+                h_tilda, _ = self.sample_hidden(v_tilda)
+                
+                v_sample = chain_start
+                v_t = v_sample
+                h_t, _ = self.sample_hidden(v_t)
+                
+                #we now convert to numpy array, computer outer vector
+                #and then return to pytorch tensor
+                #v_tilda_numpy = v_tilda.numpy()
+                #h_tilda_numpy = h_tilda.numpy()
+                v_tilda_numpy = v_tilda
+                h_tilda_numpy = h_tilda
+                #v_t_numpy = v_t.numpy()
+                #h_t_numpy = h_t.numpy()
+                v_t_numpy = v_t
+                h_t_numpy = h_t
+                
+                help_matrix_numpy = np.outer(h_t_numpy, v_t_numpy) - np.outer(h_tilda_numpy, v_tilda_numpy)
+                #help_matrix = torch.from_numpy(help_matrix_numpy)
+                help_matrix = help_matrix_numpy.transpose()
+                
+                #print("this is help matrix shape", help_matrix.shape)
+                #print("this is weight_matrix shape", weight_matrix.shape)
+                #print("this is visible_bias_vector shape", visible_bias_vector.shape)
+                #print("this is hidden_bias_vector shape", hidden_bias_vector.shape)
+                
+                
+                weight_matrix += help_matrix
+                visible_bias_vector += (v_t - v_tilda)
+                hidden_bias_vector += (h_t - h_tilda)
             
-            chain_start = np.asarray(input_vector).reshape((len(input_vector), 1))
-
-    
-            #this computers a gibbs sampling of my input vector
-            for step in range(self.num_gibbs_samplings):
-                if step == 0:
-                    nv_means, nv_samples,\
-                    nh_means, nh_samples = self.gibbs_vhv(chain_start)
-                else:
-                    nv_means, nv_samples,\
-                    nh_means, nh_samples = self.gibbs_vhv(nh_samples)
-    
-    
-            
-            v_tilda = nv_samples
-            #print("this is tilda shape", v_tilda.shape)
-            h_tilda, _ = self.sample_hidden(v_tilda)
-            
-            v_sample = chain_start
-            v_t = v_sample
-            h_t, _ = self.sample_hidden(v_t)
-            
-            #we now convert to numpy array, computer outer vector
-            #and then return to pytorch tensor
-            #v_tilda_numpy = v_tilda.numpy()
-            #h_tilda_numpy = h_tilda.numpy()
-            v_tilda_numpy = v_tilda
-            h_tilda_numpy = h_tilda
-            #v_t_numpy = v_t.numpy()
-            #h_t_numpy = h_t.numpy()
-            v_t_numpy = v_t
-            h_t_numpy = h_t
-            
-            help_matrix_numpy = np.outer(h_t_numpy, v_t_numpy) - np.outer(h_tilda_numpy, v_tilda_numpy)
-            #help_matrix = torch.from_numpy(help_matrix_numpy)
-            help_matrix = help_matrix_numpy.transpose()
-            
-            #print("this is help matrix shape", help_matrix.shape)
-            #print("this is weight_matrix shape", weight_matrix.shape)
-            #print("this is visible_bias_vector shape", visible_bias_vector.shape)
-            #print("this is hidden_bias_vector shape", hidden_bias_vector.shape)
-            
-            
-            weight_matrix += help_matrix
-            visible_bias_vector += (v_t - v_tilda)
-            hidden_bias_vector += (h_t - h_tilda)
-        
-  
-        #finding the mean value
-        weight_matrix = weight_matrix/len(training_data)
-        hidden_bias_vector = hidden_bias_vector/len(training_data)
-        visible_bias_vector = visible_bias_vector/len(training_data)
-        
-        #adjusting the weights and biases
-        self.weights = self.weights + self.learning_rate * help_matrix
-        
-        self.hidden_bias = self.hidden_bias + self.learning_rate * hidden_bias_vector
-        
-        self.visible_bias = self.visible_bias + self.learning_rate * visible_bias_vector
+      
+            #finding the mean value
+            weight_matrix = weight_matrix/len(training_data)
+            hidden_bias_vector = hidden_bias_vector/len(training_data)
+            visible_bias_vector = visible_bias_vector/len(training_data)
+                
+            #adjusting the weights and biases
+            self.weights = self.weights + self.learning_rate * help_matrix
+                
+            self.hidden_bias = self.hidden_bias + self.learning_rate * hidden_bias_vector
+                
+            self.visible_bias = self.visible_bias + self.learning_rate * visible_bias_vector
         
         
     def train(self, training_set, num_epochs):
