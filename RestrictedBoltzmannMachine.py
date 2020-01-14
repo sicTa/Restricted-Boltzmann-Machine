@@ -1,288 +1,355 @@
-#Restricted Boltzmann Machine
-import torch
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Dec 23 13:45:38 2019
+
+@author: sicTa
+"""
+
+'''
+A working RBM
+'''
+
+
 import numpy as np
 
 
-class RBM(torch.nn.Module):
-    '''
-    A class containing the model of a single restricted Boltzmann machine.
+class RBM:
+  
+  def __init__(self, num_visible, num_hidden):
+    self.num_hidden = num_hidden
+    self.num_visible = num_visible
+    self.debug_print = True
+
+    # Initialize a weight matrix, of dimensions (num_visible x num_hidden), using
+    # a uniform distribution between -sqrt(6. / (num_hidden + num_visible))
+    # and sqrt(6. / (num_hidden + num_visible)). One could vary the 
+    # standard deviation by multiplying the interval with appropriate value.
+    # Here we initialize the weights with mean 0 and standard deviation 0.1. 
+    # Reference: Understanding the difficulty of training deep feedforward 
+    # neural networks by Xavier Glorot and Yoshua Bengio
+    np_rng = np.random.RandomState(1234)
+
+    self.weights = np.asarray(np_rng.uniform(
+			low=-0.1 * np.sqrt(6. / (num_hidden + num_visible)),
+                       	high=0.1 * np.sqrt(6. / (num_hidden + num_visible)),
+                       	size=(num_visible, num_hidden)))
+
+
+    # Insert weights for the bias units into the first row and first column.
+    self.weights = np.insert(self.weights, 0, 0, axis = 0)
+    self.weights = np.insert(self.weights, 0, 0, axis = 1)
     
-    '''
     
-    def __init__(self, num_visible, num_hidden, num_gibbs_samplings = 1, learning_rate=1e-3):
-        super(RBM,self).__init__()
-        self.desc = "RBM"
-          
-        self.num_visible = num_visible                                #number of visible nodes
-        self.num_hidden = num_hidden                                  #number of hidden nodes
-        self.num_gibbs_samplings = num_gibbs_samplings                #number of Gibbs samplings
-        self.learning_rate = learning_rate
+  def return_weights(self):
+      return self.weights
 
-        self.weights = np.random.rand(num_visible, num_hidden) * 0.5     #initialize weight to random value
-        
-        #the following need to be defined as a ndarray
-        #for the np.dot function towork
-        self.visible_bias = np.ones((num_visible, 1)) * 0.5             #initialize the visible bias to 0.5
-        self.hidden_bias = np.zeros((num_hidden, 1))                    #initialize hidden bias to 0
+  def contrastive_divergence(self, data, max_epochs = 1000, learning_rate = 0.1):
+    """
+    Train the machine.
+    Parameters
+    ----------
+    data: A matrix where each row is a training example consisting of the states of visible units.    
+    """
 
-    def sample_hidden(self, visible_probabilities):
-        '''
-        The function return an array of probabilites sampled at the hidden layer. 
-        For more information refer to paper "Deep Belief Networks for phone recognition"
-        page 2.
-        '''
-        #print("Shape of visible probs")
-        #print(visible_probabilities.shape)
-        
-        #print("Shape of weight")
-        #print(self.weights.shape)
-        
-        #print("Shape of first product")
-        #print(np.dot(visible_probabilities.transpose(), self.weights).shape)
-        
-        #treat all as ndarrays (easier that way)
-        #hidden_activations = np.dot(visible_probabilities, self.weights) + self.hidden_bias
-        hidden_activations = np.dot(visible_probabilities.transpose(), self.weights).transpose() + self.hidden_bias
-        hidden_probabilities = self._sigmoid(hidden_activations)
-        
-        #print("Shape of hidden activations")
-        #print(hidden_activations.shape)
+    num_examples = data.shape[0]
 
-        #hidden_probabilities_numpy = hidden_probabilities.numpy()
-        hidden_probabilities_numpy = hidden_probabilities
-        h1_sample_numpy = np.random.binomial(size=hidden_probabilities_numpy.shape,   # discrete: binomial
-                                       n=1,
-                                       p=hidden_probabilities_numpy)
 
-        #hidden_sample = tensor.from_numpy(h1_sample_numpy)
-        hidden_sample = h1_sample_numpy
-        
-        #print("Shape of hidden samp")
-        #print(hidden_sample.shape)
-
-        #returns 2 ndarrays
-        return hidden_probabilities, hidden_sample
     
-    def hidden_activation(self, visible_probabilities):
-        '''
-        Returns the activation of hidden variables
-        '''
-        hidden_activations = np.dot(visible_probabilities.transpose(), self.weights).transpose() + self.hidden_bias
-        return hidden_activations
+    # Insert bias units of 1 into the first column.
+    data = np.insert(data, 0, 1, axis = 1)
 
-    def sample_visible(self, hidden_probabilities):
-        '''
-        The function return an array of probabilites sampled at the visible layer. 
-        For more information refer to paper "Deep Belief Networks for phone recognition"
-        page 2.
-        '''
-        
-        #print("this is the my test shape")
-        #print(hidden_probabilities.shape)
-        #print(self.weights.transpose().shape)
-        #print(np.dot(hidden_probabilities.transpose(), self.weights.transpose()).shape)
-        #print(hidden_probabilities.shape)
-        #print(self.visible_bias.shape)
-        
-        visible_activations = np.dot(hidden_probabilities.transpose(), self.weights.transpose()).transpose() + self.visible_bias
-        visible_probabilities = self._sigmoid(visible_activations)
-
-        #visible_probabilities_numpy = visible_probabilities.numpy()
-        visible_probabilities_numpy = visible_probabilities
-        v1_sample_numpy  = np.random.binomial(size=visible_probabilities_numpy.shape,   # discrete: binomial
-                                       n=1,
-                                       p=visible_probabilities_numpy)
-
-        #visible_sample = tensor.from_numpy(v1_sample_numpy)
-        visible_sample = v1_sample_numpy
-        
-        #print("This is the final result")
-        #print(visible_sample.shape)
-        
-        #returns two ndarrays
-        return visible_probabilities, visible_sample
-    
-    def visible_activation(self, hidden_probabilities):
-        '''
-        Returns the activation of visible variables
-        '''
-        visible_activations = np.dot(hidden_probabilities.transpose(), self.weights.transpose()).transpose() + self.visible_bias
-        return visible_activations
-
-    def propup(self, v):
-        '''
-        For a visible vector v return another vector of probabilities.
-        For more information refer to paper "Deep Belief Networks for phone recognition"
-        page 2.
-        This is, in fact, the result the RBM sees at the hidden layer when a signal
-        is coming from the visible layer.
-        '''
-
-        propup_pre_sigma = np.dot(v.transpose(), self.weights).transpose() + self.hidden_bias
-        return self._sigmoid(propup_pre_sigma)
-
-
-    def propdown(self, h):
-        '''
-        For a hidden vector h return another vector of probabilities.
-        For more information refer to paper "Deep Belief Networks for phone recognition"
-        page 2.
-        This is, in fact, the result the RBM sees at the visible layer when a signal
-        is coming from the hidden layer.
-        '''
-
-        propdown_pre_sigma = np.dot(h.transpose(), self.weights.transpose()).transpose() + self.visible_bias
-        return self._sigmoid(propdown_pre_sigma)
-
-    def reconstruct(self, v):
-        '''
-        For a given input vector v, we raturn a vector
-        reconstructed by the network. 
-        '''
-
-        hidden_res = self.propup(v)
-        reconstructed_v = self.propdown(hidden_res)
-        return reconstructed_v
-
-    def gibbs_hvh(self, h_sample):
-        '''
-        This method reconstruct one gibbs iteration. A signal is
-        propagated from the hidden layer, the result is memorized at the visible
-        layer and then propagated back to the hidden layer. 
-        '''
-
-        v1_prob, v1_sample = self.sample_visible(h_sample)
-        h1_prob, h1_sample = self.sample_hidden(v1_sample)
-
-        return v1_prob, v1_sample, h1_prob, h1_sample
-
-    def gibbs_vhv(self, v_sample):
-        '''
-        This method reconstruct one gibbs iteration. A signal is
-        propagated from the visible layer, the result is memorized at the hidden
-        layer and then propagated back to the visible layer. 
-        '''
-        h1_prob, h1_sample = self.sample_hidden(v_sample)
-        v1_prob, v1_sample = self.sample_visible(h1_sample)
-
-        return v1_prob, v1_sample, h1_prob, h1_sample
-
-    def free_energy(self, v_sample, W):
-        num = len(v_sample)
-        Wv = np.clip(torch.matmul(v_sample,W) + self.hidden_bias,-80,80)    #we restrict the result to the range -80, 80
-        hidden = np.log(1+np.exp(Wv)).sum(1)
-        vbias = torch.matmul(v_sample, self.visible_bias).view(len(hidden))
-        return -hidden.view(num)-vbias.view(num)
-
-
-    def contrastive_divergence(self, training_data, num_epochs = 20):
-        '''
-        An implementation of Contrastive Divergence algorithm with
-        k Gibbs' samplings (CD-k)
-        '''
-        
-        for number_of_epochs in range(num_epochs):
-            print("Epoch", number_of_epochs)
-            num_visible = self.num_visible
-            num_hidden = self.num_hidden
-            
-            
-            weight_matrix = np.zeros((num_visible, num_hidden))
-            visible_bias_vector = np.zeros((num_visible, 1))
-            hidden_bias_vector = np.zeros((num_hidden, 1))
-            
-            for input_vector in training_data:
-                #ph_mean, ph_sample = self.sample_hidden(input_vector)
-                chain_start = np.asarray(input_vector).reshape((len(input_vector), 1))
-                #this computers a gibbs sampling of my input vector
-                for step in range(self.num_gibbs_samplings):
-                    if step == 0:
-                        nv_means, nv_samples,\
-                        nh_means, nh_samples = self.gibbs_vhv(chain_start)
-                    else:
-                        nv_means, nv_samples,\
-                        nh_means, nh_samples = self.gibbs_vhv(nv_samples)
-        
-                v_tilda = nv_samples
-                #print("this is tilda shape", v_tilda.shape)
-                h_tilda, _ = self.sample_hidden(v_tilda)
-                
-                v_sample = chain_start
-                v_t = v_sample
-                h_t, _ = self.sample_hidden(v_t)
-                
-                #we now convert to numpy array, computer outer vector
-                #and then return to pytorch tensor
-                #v_tilda_numpy = v_tilda.numpy()
-                #h_tilda_numpy = h_tilda.numpy()
-                v_tilda_numpy = v_tilda
-                h_tilda_numpy = h_tilda
-                #v_t_numpy = v_t.numpy()
-                #h_t_numpy = h_t.numpy()
-                v_t_numpy = v_t
-                h_t_numpy = h_t
-                
-                help_matrix_numpy = np.outer(h_t_numpy, v_t_numpy) - np.outer(h_tilda_numpy, v_tilda_numpy)
-                #help_matrix = torch.from_numpy(help_matrix_numpy)
-                help_matrix = help_matrix_numpy.transpose()
-                
-                #print("this is help matrix shape", help_matrix.shape)
-                #print("this is weight_matrix shape", weight_matrix.shape)
-                #print("this is visible_bias_vector shape", visible_bias_vector.shape)
-                #print("this is hidden_bias_vector shape", hidden_bias_vector.shape)
-                
-                
-                weight_matrix += help_matrix
-                visible_bias_vector += (v_t - v_tilda)
-                hidden_bias_vector += (h_t - h_tilda)
-            
+    for epoch in range(max_epochs):      
+      # Clamp to the data and sample from the hidden units. 
+      # (This is the "positive CD phase", aka the reality phase.)
+      pos_hidden_activations = np.dot(data, self.weights)      
+      pos_hidden_probs = self._logistic(pos_hidden_activations)
+      pos_hidden_probs[:,0] = 1 # Fix the bias unit.
       
-            #finding the mean value
-            weight_matrix = weight_matrix/len(training_data)
-            hidden_bias_vector = hidden_bias_vector/len(training_data)
-            visible_bias_vector = visible_bias_vector/len(training_data)
-                
-            #adjusting the weights and biases
-            self.weights = self.weights + self.learning_rate * help_matrix
-                
-            self.hidden_bias = self.hidden_bias + self.learning_rate * hidden_bias_vector
-                
-            self.visible_bias = self.visible_bias + self.learning_rate * visible_bias_vector
+      #effectively, we are condictiong a Bernoulli sampling 
+      pos_hidden_states = pos_hidden_probs > np.random.rand(num_examples, self.num_hidden + 1)
+      # Note that we're using the activation *probabilities* of the hidden states, not the hidden states       
+      # themselves, when computing associations. We could also use the states; see section 3 of Hinton's 
+      # "A Practical Guide to Training Restricted Boltzmann Machines" for more.
+      
+      #this step returns the data bact to the visible layer
+      pos_associations = np.dot(data.T, pos_hidden_probs)
+
+      # Reconstruct the visible units and sample again from the hidden units.
+      # (This is the "negative CD phase", aka the daydreaming phase.)
+      neg_visible_activations = np.dot(pos_hidden_states, self.weights.T)
+      neg_visible_probs = self._logistic(neg_visible_activations)
+      neg_visible_probs[:,0] = 1 # Fix the bias unit.
+      neg_hidden_activations = np.dot(neg_visible_probs, self.weights)
+      neg_hidden_probs = self._logistic(neg_hidden_activations)
+      # Note, again, that we're using the activation *probabilities* when computing associations, not the states 
+      # themselves.
+      neg_associations = np.dot(neg_visible_probs.T, neg_hidden_probs)
+
+      # Update weights.
+      self.weights += learning_rate * ((pos_associations - neg_associations) / num_examples)
+
+      error = np.sum((data - neg_visible_probs) ** 2)
+      if self.debug_print and epoch % 20 == 0:
+        print("Epoch %s: error is %s" % (epoch, error))
         
         
-    def train(self, training_set, num_epochs):
-        for i in range(num_epochs):
-                self.contrastive_divergence(training_set)
+  def sample_hidden(self, data):
+    """
+    Assuming the RBM has been trained (so that weights for the network have been learned),
+    run the network on a set of visible units, to get a sample of the hidden units.
+    
+    Parameters
+    ----------
+    data: A matrix where each row consists of the states of the visible units.
+    
+    Returns
+    -------
+    hidden_states: A matrix where each row consists of the hidden units activated from the visible
+    units in the data matrix passed in.
+    """
+    
+    num_examples = data.shape[0]
+    
+    # Create a matrix, where each row is to be the hidden units (plus a bias unit)
+    # sampled from a training example.
+    hidden_states = np.ones((num_examples, self.num_hidden + 1))
+    
+    # Insert bias units of 1 into the first column of data.
+    data = np.insert(data, 0, 1, axis = 1)
+
+    # Calculate the activations of the hidden units.
+    hidden_activations = np.dot(data, self.weights)
+    # Calculate the probabilities of turning the hidden units on.
+    hidden_probs = self._logistic(hidden_activations)
+    return hidden_probs
+      
+
+
+  def run_visible_probabilities(self, data):
+    """
+    Assuming the RBM has been trained (so that weights for the network have been learned),
+    run the network on a set of visible units, to get a sample of the hidden units.
+    
+    Parameters
+    ----------
+    data: A matrix where each row consists of the states of the visible units.
+    
+    Returns
+    -------
+    hidden_states: A matrix where each row consists of the hidden units activated from the visible
+    units in the data matrix passed in.
+    """
+    
+    num_examples = data.shape[0]
+    
+    # Create a matrix, where each row is to be the hidden units (plus a bias unit)
+    # sampled from a training example.
+    hidden_states = np.ones((num_examples, self.num_hidden + 1))
+    
+    # Insert bias units of 1 into the first column of data.
+    data = np.insert(data, 0, 1, axis = 1)
+
+    # Calculate the activations of the hidden units.
+    hidden_activations = np.dot(data, self.weights)
+    # Calculate the probabilities of turning the hidden units on.
+    hidden_probs = self._logistic(hidden_activations)
+    
+    return hidden_probs[:,1:]
+      
+  def run_visible(self, data):
+    """
+    Assuming the RBM has been trained (so that weights for the network have been learned),
+    run the network on a set of visible units, to get a sample of the hidden units.
+    
+    Parameters
+    ----------
+    data: A matrix where each row consists of the states of the visible units.
+    
+    Returns
+    -------
+    hidden_states: A matrix where each row consists of the hidden units activated from the visible
+    units in the data matrix passed in.
+    """
+    
+    num_examples = data.shape[0]
+    
+    # Create a matrix, where each row is to be the hidden units (plus a bias unit)
+    # sampled from a training example.
+    hidden_states = np.ones((num_examples, self.num_hidden + 1))
+    
+    # Insert bias units of 1 into the first column of data.
+    data = np.insert(data, 0, 1, axis = 1)
+
+    # Calculate the activations of the hidden units.
+    hidden_activations = np.dot(data, self.weights)
+    # Calculate the probabilities of turning the hidden units on.
+    hidden_probs = self._logistic(hidden_activations)
+    # Turn the hidden units on with their specified probabilities.
+    hidden_states[:,:] = hidden_probs > np.random.rand(num_examples, self.num_hidden + 1)
+    # Always fix the bias unit to 1.
+    # hidden_states[:,0] = 1
+  
+    # Ignore the bias units.
+    hidden_states = hidden_states[:,1:]
+    return hidden_states
+    
+  # TODO: Remove the code duplication between this method and `run_visible`?
+  def run_hidden(self, data):
+    """
+    Assuming the RBM has been trained (so that weights for the network have been learned),
+    run the network on a set of hidden units, to get a sample of the visible units.
+    Parameters
+    ----------
+    data: A matrix where each row consists of the states of the hidden units.
+    Returns
+    -------
+    visible_states: A matrix where each row consists of the visible units activated from the hidden
+    units in the data matrix passed in.
+    """
+
+    num_examples = data.shape[0]
+
+    # Create a matrix, where each row is to be the visible units (plus a bias unit)
+    # sampled from a training example.
+    visible_states = np.ones((num_examples, self.num_visible + 1))
+
+    # Insert bias units of 1 into the first column of data.
+    data = np.insert(data, 0, 1, axis = 1)
+
+    # Calculate the activations of the visible units.
+    visible_activations = np.dot(data, self.weights.T)
+    # Calculate the probabilities of turning the visible units on.
+    visible_probs = self._logistic(visible_activations)
+    # Turn the visible units on with their specified probabilities.
+    visible_states[:,:] = visible_probs > np.random.rand(num_examples, self.num_visible + 1)
+    # Always fix the bias unit to 1.
+    # visible_states[:,0] = 1
+
+    # Ignore the bias units.
+    visible_states = visible_states[:,1:]
+    return visible_states
+    
+  def daydream(self, num_samples):
+    """
+    Randomly initialize the visible units once, and start running alternating Gibbs sampling steps
+    (where each step consists of updating all the hidden units, and then updating all of the visible units),
+    taking a sample of the visible units at each step.
+    Note that we only initialize the network *once*, so these samples are correlated.
+    Returns
+    -------
+    samples: A matrix, where each row is a sample of the visible units produced while the network was
+    daydreaming.
+    """
+
+    # Create a matrix, where each row is to be a sample of of the visible units 
+    # (with an extra bias unit), initialized to all ones.
+    samples = np.ones((num_samples, self.num_visible + 1))
+
+    # Take the first sample from a uniform distribution.
+    samples[0,1:] = np.random.rand(self.num_visible)
+
+    # Start the alternating Gibbs sampling.
+    # Note that we keep the hidden units binary states, but leave the
+    # visible units as real probabilities. See section 3 of Hinton's
+    # "A Practical Guide to Training Restricted Boltzmann Machines"
+    # for more on why.
+    for i in range(1, num_samples):
+      visible = samples[i-1,:]
+
+      # Calculate the activations of the hidden units.
+      hidden_activations = np.dot(visible, self.weights)      
+      # Calculate the probabilities of turning the hidden units on.
+      hidden_probs = self._logistic(hidden_activations)
+      # Turn the hidden units on with their specified probabilities.
+      hidden_states = hidden_probs > np.random.rand(self.num_hidden + 1)
+      # Always fix the bias unit to 1.
+      hidden_states[0] = 1
+
+      # Recalculate the probabilities that the visible units are on.
+      visible_activations = np.dot(hidden_states, self.weights.T)
+      visible_probs = self._logistic(visible_activations)
+      visible_states = visible_probs > np.random.rand(self.num_visible + 1)
+      samples[i,:] = visible_states
+
+    # Ignore the bias units (the first column), since they're always set to 1.
+    return samples[:,1:]        
+      
+  def _logistic(self, x):
+    return 1.0 / (1 + np.exp(-x))
+
+
+  def export_rbm(self, file_name):
+      
+      
+      f = open(file_name, "w")
+      x = self.weights.shape[0]
+      y = self.weights.shape[1]
+      string = ""
+      for i in range(x):
+          for j in range(y):
+              string += str(self.weights[i][j]) + " "
+          f.write(string + "\n")
+          string = ""
+          
+          
+      f.close()
+      
+  def import_rbm(self, file_name):
+      file = open(file_name, "r")
+      i = 0
+      j = 0
+      
+      
+      for line in file:
+          elements = line.split()
+          for elem in elements:
+              j += 1
+          i += 1
+      
+      file.close()
+      file = open(file_name, "r")
+          
+      np_rng = np.random.RandomState(1234)
+      self.weights = np.asarray(np_rng.uniform(
+			low=-0.1 * np.sqrt(6. / (i + j)),
+                       	high=0.1 * np.sqrt(6. / (i + j)),
+                       	size=(i, j)))
+
+
+      
+      # Insert weights for the bias units into the first row and first column.
+      self.weights = np.insert(self.weights, 0, 0, axis = 0)
+      self.weights = np.insert(self.weights, 0, 0, axis = 1)
+      
+      
+      self.num_hidden = j
+      self.num_visible = i
+      
+      print(i, j)
+      
+      i = 0
+      j = 0
+      
+      
+      
+      for line in file:
+          elements = line.split()
+          for elem in elements:
+              self.weights[i][j] = float(elem)
+              j += 1
+          i += 1
+          j = 0
+          
+      file.close() 
+              
+              
         
-        
-    def return_weights(self):
-        return self.weights
-        
-    def _sigmoid(self, x):
-        '''
-        Standard definition of a sigmoid function
-        '''
-        return 1 / (1 + np.exp(-x))
+              
 
-    def _random_probabilities(self, num):
-        '''
-        Returns a torch array of random probabilities
-        '''
-        random_probabilities = torch.rand(num)
-        return random_probabilities
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == '__main__':
+  r = RBM(num_visible = 6, num_hidden = 30)
+  training_data = np.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]])
+  r.contrastive_divergence(training_data, max_epochs = 5000)
+  print(r.weights)
+  user = np.array([[0,0,0,1,1,0]])
+  print(r.run_visible(user))
